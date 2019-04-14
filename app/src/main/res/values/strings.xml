@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">MoviePopUp</string>
+    <string name="most_popular">Most Popular</string>
+    <string name="highest_rating">Highest Rating</string>
+    <string name="title_of_movie">title</string>
+    <string name="favorites">Favorites</string>
+</resources>
