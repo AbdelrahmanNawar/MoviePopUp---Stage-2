@@ -248,7 +248,6 @@ public class MovieDetails extends AppCompatActivity implements LoaderManager.Loa
         AppExecutors.getInstance().diskIO().execute(new Runnable() {
             @Override
             public void run() {
-                Log.d(">>>>>>>>>>>>>", String.valueOf(MovieDetails.imageButtonState));
                 if (MovieDetails.imageButtonState) {
                     mDb.myDao().deleteTask(createEntity.movieId);
                 } else {

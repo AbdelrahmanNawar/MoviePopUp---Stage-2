@@ -42,8 +42,7 @@ public class MovieAdapter extends RecyclerView.Adapter<ImageViewHolder> {
     }
 
     public void setMovieTask(ArrayList<MovieStructure> createEntities) {
-//    public void setMovieTask(List<CreateEntity> createEntities) {
-//        sortHolderType = toMovieStructure((ArrayList<CreateEntity>) createEntities);
+
         sortHolderType = createEntities;
         notifyDataSetChanged();
     }

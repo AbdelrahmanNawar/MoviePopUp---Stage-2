@@ -1,6 +1,5 @@
 package com.example.android.moviepopup;
 
-import android.arch.lifecycle.Observer;
 import android.arch.lifecycle.ViewModelProviders;
 import android.content.Context;
 import android.content.Intent;
@@ -19,6 +18,7 @@ import android.view.MenuItem;
 import com.example.android.moviepopup.BackGroundFetching.FetchJSONData;
 import com.example.android.moviepopup.MyRoom.AppDatabase;
 import com.example.android.moviepopup.MyRoom.CreateEntity;
+import com.orhanobut.hawk.Hawk;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,17 +33,27 @@ public class MainActivity extends AppCompatActivity implements SendingIndex, Loa
     private boolean favoriteFlag = false;
     public static List<CreateEntity> favList;
     private static final int GET_FETCH_LOADER = 2871;
-
+    private ArrayList<MovieStructure> chosenSort = new ArrayList<>();
+    private ArrayList<MovieStructure> tempHolder = new ArrayList<>();
+    private final String TAG = "nawar";
+    private final String HAWK_ARRAY_KEY = "sortedArray";
+    private final String HAWK_SORTING = "sortingType";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        Hawk.init(this).build();
+
+
         getSupportLoaderManager().restartLoader(GET_FETCH_LOADER, null, this).forceLoad();
+
+
         myRecyclerView = findViewById(R.id.movie_recycler_id);
         myManager = new GridLayoutManager(this, calculateNoOfColumns(this));
         mDb = AppDatabase.getInstance(getApplicationContext());
         DatabaseObserver();
+
 
     }
 
@@ -58,8 +68,27 @@ public class MainActivity extends AppCompatActivity implements SendingIndex, Loa
     }
 
     public void wiringAdapterToRecyclerView() {
+
         myAdapter = new MovieAdapter(this);
-        myAdapter.setMovieTask(FetchJSONData.pMovieObjectList);
+
+        if (Hawk.contains(HAWK_ARRAY_KEY) && Hawk.get(HAWK_ARRAY_KEY) != null) {
+            tempHolder = Hawk.get(HAWK_ARRAY_KEY);
+            myAdapter.setMovieTask(tempHolder);
+        } else if (sortingType == SortingType.mostPopulare) {
+            chosenSort = FetchJSONData.pMovieObjectList;
+            Hawk.put(HAWK_ARRAY_KEY, chosenSort);
+            Hawk.put(HAWK_SORTING, sortingType);
+            myAdapter.setMovieTask(chosenSort);
+        } else if (sortingType == SortingType.topRated) {
+            chosenSort = FetchJSONData.trMovieObjectList;
+            Hawk.put(HAWK_ARRAY_KEY, chosenSort);
+            Hawk.put(HAWK_SORTING, sortingType);
+            myAdapter.setMovieTask(chosenSort);
+        } else if (sortingType == SortingType.favorite) {
+            favoriteFlag = true;
+            sortingType = SortingType.favorite;
+            DatabaseObserver();
+        }
         myRecyclerView.setLayoutManager(myManager);
         myRecyclerView.setAdapter(myAdapter);
 
@@ -77,11 +106,18 @@ public class MainActivity extends AppCompatActivity implements SendingIndex, Loa
         switch (id) {
             case R.id.sorting_by_highest_rate:
                 sortingType = SortingType.topRated;
-                myAdapter.setMovieTask(FetchJSONData.trMovieObjectList);
+                chosenSort = FetchJSONData.trMovieObjectList;
+                Hawk.put(HAWK_ARRAY_KEY, chosenSort);
+                Hawk.put(HAWK_SORTING, sortingType);
+                tempHolder = Hawk.get(HAWK_ARRAY_KEY);
+                myAdapter.setMovieTask(chosenSort);
                 break;
             case R.id.sorting_by_most_popular:
                 sortingType = SortingType.mostPopulare;
-                myAdapter.setMovieTask(FetchJSONData.pMovieObjectList);
+                chosenSort = FetchJSONData.pMovieObjectList;
+                Hawk.put(HAWK_ARRAY_KEY, chosenSort);
+                Hawk.put(HAWK_SORTING, sortingType);
+                myAdapter.setMovieTask(chosenSort);
                 break;
             case R.id.sorting_by_favorites:
                 favoriteFlag = true;
@@ -95,26 +131,31 @@ public class MainActivity extends AppCompatActivity implements SendingIndex, Loa
     public void onClick(int index) {
         intent = new Intent(this, MovieDetails.class);
         intent.putExtra("index", index);
-        intent.putExtra("sortingType", sortingType);
-        if (favList != null && sortingType == SortingType.favorite)
-            intent.putExtra("movieId", favList.get(index).movieId);
-        startActivity(intent);
-    }
+        if (Hawk.contains(HAWK_SORTING) && Hawk.get(HAWK_SORTING) != null) {
+            sortingType = Hawk.get(HAWK_SORTING);
+            intent.putExtra("sortingType", sortingType);
+            if (favList != null && sortingType == SortingType.favorite){
+                tempHolder = Hawk.get(HAWK_ARRAY_KEY);
+                intent.putExtra("movieId", tempHolder.get(index).movieId);
+            }
+        } else {
+            intent.putExtra("sortingType", sortingType);
+            if (favList != null && sortingType == SortingType.favorite)
+                intent.putExtra("movieId", favList.get(index).movieId);
+        }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
+        startActivity(intent);
     }
 
     private void DatabaseObserver() {
         MyViewModel myViewModel = ViewModelProviders.of(this).get(MyViewModel.class);
-        myViewModel.getEntity().observe(this, new Observer<List<CreateEntity>>() {
-            @Override
-            public void onChanged(@Nullable List<CreateEntity> createEntities) {
-                if (favoriteFlag && createEntities != null) {
-                    myAdapter.setMovieTask(toMovieStructure((ArrayList<CreateEntity>) createEntities));
-                    favList = createEntities;
-                }
+        myViewModel.getEntity().observe(this, createEntities -> {
+            if (favoriteFlag && createEntities != null) {
+                chosenSort = toMovieStructure(createEntities);
+                Hawk.put(HAWK_ARRAY_KEY, chosenSort);
+                Hawk.put(HAWK_SORTING, sortingType);
+                myAdapter.setMovieTask(chosenSort);
+                favList = createEntities;
             }
         });
     }
@@ -122,7 +163,7 @@ public class MainActivity extends AppCompatActivity implements SendingIndex, Loa
     public static ArrayList<MovieStructure> toMovieStructure(List<CreateEntity> createEntities) {
         ArrayList<MovieStructure> movieStructuresArray = new ArrayList<>();
         for (int i = 0; i < createEntities.size(); i++) {
-            movieStructuresArray.add( new MovieStructure(createEntities.get(i)));
+            movieStructuresArray.add(new MovieStructure(createEntities.get(i)));
         }
         return movieStructuresArray;
     }
